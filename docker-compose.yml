@@ -1,0 +1,66 @@
+version: '2.4'
+
+services:
+######################################
+# SonarQube Container
+######################################
+  sonarqube:
+    restart: ${RESTART_POLICY}
+    build:
+        context: ./
+    container_name: ${PROJECT_NAME}
+    environment:
+        - "JAVA_OPTS=-XX:InitialRAMPercentage=50 -XX:MaxRAMPercentage=85"
+    mem_limit: 3096MB
+    ports:
+      - ${PORT}:9000
+      - 9092:9092
+    volumes:
+        - ./projects:/data/project
+        - ./sonar-scanner.properties:/opt/sonar-scanner/conf/sonar-scanner.properties
+        - ./sonar.properties:/opt/sq/conf/sonar.properties
+        - ./template:/data/template
+        - ./reports:/data/reports
+        - /root/.ssh/:/home/sonarqube/.ssh
+        #- .docker/.cache:/home/sonarqube/.sonar/cache/_tmp
+       
+    environment:
+      SONARQUBE_JDBC_USERNAME: ${POSTGRES_USER}
+      SONARQUBE_JDBC_PASSWORD: ${POSTGRES_PASSWORD}
+      SONARQUBE_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DATABASE}
+      
+    networks:
+          - internal
+          - app
+    labels:
+          - "traefik.enable=true"
+          - "traefik.http.routers.${PROJECT_NAME}-sonar.rule=Host(`${DOMAIN_NAME}`)"
+          - "traefik.docker.network=app"
+      
+######################################
+# Postgres Container
+######################################
+  postgres:
+    restart: ${RESTART_POLICY}
+    container_name: ${PROJECT_NAME}-db
+    image: postgres:10.6
+    volumes:
+        - ".docker/.pgsql:/var/lib/postgresql"
+        - ".docker/.data:/var/lib/postgresql/data"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+    networks: 
+          - internal
+    labels:
+          - 'traefik.enable=false'
+
+
+networks:
+    app:
+        external:
+            name: app
+
+    internal:
+        name: ${PROJECT_NAME}
